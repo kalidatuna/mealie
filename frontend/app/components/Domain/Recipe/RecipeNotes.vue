@@ -6,46 +6,63 @@
     <h2 class="my-4 text-h5 font-weight-medium opacity-80">
       {{ $t("recipe.note") }}
     </h2>
-    <div
-      v-for="(note, index) in model"
-      :id="'note' + index"
-      :key="'note' + index"
-      class="mt-1"
+    <VueDraggable
+      v-model="model"
+      :disabled="!edit"
+      handle=".note-drag-handle"
+      :delay="250"
+      :delay-on-touch-only="true"
+      :animation="200"
+      ghost-class="ghost"
     >
-      <v-card v-if="edit">
-        <v-card-text>
-          <div class="d-flex align-center">
-            <v-text-field
-              v-model="model[index]['title']"
+      <div
+        v-for="(note, index) in model"
+        :id="'note' + index"
+        :key="'note' + index"
+        class="mt-1"
+      >
+        <v-card v-if="edit">
+          <v-card-text>
+            <div class="d-flex align-center">
+              <v-btn
+                icon
+                class="note-drag-handle mr-2 cursor-grab"
+                elevation="0"
+              >
+                <v-icon>{{ $globals.icons.arrowUpDown }}</v-icon>
+              </v-btn>
+              <v-text-field
+                v-model="model[index]['title']"
+                variant="underlined"
+                :label="$t('recipe.title')"
+              />
+              <v-btn
+                icon
+                class="mr-2"
+                elevation="0"
+                @click="removeByIndex(index)"
+              >
+                <v-icon>{{ $globals.icons.delete }}</v-icon>
+              </v-btn>
+            </div>
+            <v-textarea
+              v-model="model[index]['text']"
               variant="underlined"
-              :label="$t('recipe.title')"
+              auto-grow
+              :placeholder="$t('recipe.note')"
             />
-            <v-btn
-              icon
-              class="mr-2"
-              elevation="0"
-              @click="removeByIndex(index)"
-            >
-              <v-icon>{{ $globals.icons.delete }}</v-icon>
-            </v-btn>
-          </div>
-          <v-textarea
-            v-model="model[index]['text']"
-            variant="underlined"
-            auto-grow
-            :placeholder="$t('recipe.note')"
-          />
-        </v-card-text>
-      </v-card>
-      <div v-else>
-        <v-card-title class="text-subtitle-1 font-weight-medium py-1">
-          {{ note.title }}
-        </v-card-title>
-        <v-card-text>
-          <SafeMarkdown :source="note.text" />
-        </v-card-text>
+          </v-card-text>
+        </v-card>
+        <div v-else>
+          <v-card-title class="text-subtitle-1 font-weight-medium py-1">
+            {{ note.title }}
+          </v-card-title>
+          <v-card-text>
+            <SafeMarkdown :source="note.text" />
+          </v-card-text>
+        </div>
       </div>
-    </div>
+    </VueDraggable>
 
     <div
       v-if="edit"
@@ -62,6 +79,7 @@
 </template>
 
 <script setup lang="ts">
+import { VueDraggable } from "vue-draggable-plus";
 import type { RecipeNote } from "~/lib/api/types/recipe";
 
 const model = defineModel<RecipeNote[]>({ default: () => [] });

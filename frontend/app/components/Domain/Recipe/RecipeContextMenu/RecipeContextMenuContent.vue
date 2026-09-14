@@ -44,6 +44,28 @@
     :recipes="[recipeRefWithScale]"
     :shopping-lists="shoppingLists"
   />
+  <BaseDialog
+    v-model="organizersDialog"
+    bottom-sheet
+    :title="organizersDialogTitle"
+    color="primary"
+    :icon="$globals.icons.tags"
+    can-confirm
+    @confirm="saveOrganizers()"
+  >
+    <v-card-text>
+      <RecipeOrganizerSelector
+        v-model="organizerTags"
+        selector-type="tags"
+        :show-add="true"
+      />
+      <RecipeOrganizerSelector
+        v-model="organizerCategories"
+        selector-type="categories"
+        :show-add="true"
+      />
+    </v-card-text>
+  </BaseDialog>
 
   <v-list density="compact">
     <v-list-item v-for="(item, index) in menuItems" :key="index" @click="contextMenuEventHandler(item.event)">
@@ -87,7 +109,7 @@ import { useGroupSelf } from "~/composables/use-groups";
 import { useLoggedInState } from "~/composables/use-logged-in-state";
 import { alert } from "~/composables/use-toast";
 import type { GroupRecipeActionOut, HouseholdSummary } from "~/lib/api/types/household";
-import type { Recipe } from "~/lib/api/types/recipe";
+import type { Recipe, RecipeCategory, RecipeTag } from "~/lib/api/types/recipe";
 import { isRecipeFullyPublic } from "~/lib/recipe/recipe-visibility";
 
 export interface ContextMenuIncludes {
@@ -164,9 +186,12 @@ const shareDialog = ref(false);
 const recipeDeleteDialog = ref(false);
 const mealplannerDialog = ref(false);
 const recipeDuplicateDialog = ref(false);
+const organizersDialog = ref(false);
 const recipeName = ref(props.name);
 const loading = ref(false);
 const menuItems = ref<ContextMenuItem[]>([]);
+const organizerTags = ref<RecipeTag[]>([]);
+const organizerCategories = ref<RecipeCategory[]>([]);
 
 const i18n = useI18n();
 const auth = useMealieAuth();
@@ -179,6 +204,9 @@ const groupSlug = computed(() => route.params.groupSlug as string || auth.user.v
 
 const { share, isSupported: shareIsSupported } = useShare();
 const { copy, copied, isSupported: clipboardIsSupported } = useClipboard();
+const organizersDialogTitle = computed(
+  () => `${i18n.t("general.edit")} ${i18n.t("tag.tags")} / ${i18n.t("recipe.categories")}`,
+);
 
 function getPlainRecipeLink() {
   return `${window.location.origin}/g/${groupSlug.value}/r/${props.slug}`;
@@ -211,6 +239,13 @@ const defaultItems: { [key: string]: ContextMenuItem } = {
     icon: $globals.icons.edit,
     color: undefined,
     event: "edit",
+    isPublic: false,
+  },
+  organizers: {
+    title: organizersDialogTitle.value,
+    icon: $globals.icons.tags,
+    color: undefined,
+    event: "organizers",
     isPublic: false,
   },
   delete: {
@@ -329,6 +364,9 @@ for (const [key, value] of Object.entries(props.useItems)) {
   const item = defaultItems[key];
   if (item && (item.isPublic || isOwnGroup.value)) {
     menuItems.value.push(item);
+    if (key === "edit" && isOwnGroup.value) {
+      menuItems.value.push(defaultItems.organizers);
+    }
   }
 }
 
@@ -377,6 +415,39 @@ async function handleDownloadEvent() {
   download(api.recipes.share.getZipRedirectUrl(shareToken.id), `${props.slug}.zip`);
 }
 
+async function openOrganizersDialog() {
+  if (!recipeRef.value) {
+    await refreshRecipe();
+  }
+  if (!recipeRef.value) {
+    alert.error(i18n.t("events.something-went-wrong"));
+    return;
+  }
+
+  organizerTags.value = [...(recipeRef.value.tags || [])];
+  organizerCategories.value = [...(recipeRef.value.recipeCategory || [])];
+  organizersDialog.value = true;
+}
+
+async function saveOrganizers() {
+  if (!recipeRef.value) {
+    return;
+  }
+
+  const updatedRecipe: Recipe = {
+    ...recipeRef.value,
+    tags: [...organizerTags.value],
+    recipeCategory: [...organizerCategories.value],
+  };
+  const { data, error } = await api.recipes.updateOne(props.slug, updatedRecipe);
+  if (error || !data) {
+    alert.error(i18n.t("events.something-went-wrong"));
+    return;
+  }
+
+  recipeRef.value = data;
+}
+
 async function duplicateRecipe() {
   const { data } = await api.recipes.duplicateOne(props.slug, recipeName.value);
   if (data && data.slug) {
@@ -391,6 +462,7 @@ const eventHandlers: { [key: string]: () => void | Promise<any> } = {
     recipeDeleteDialog.value = true;
   },
   edit: () => router.push(`/g/${groupSlug.value}/r/${props.slug}` + "?edit=true"),
+  organizers: openOrganizersDialog,
   download: handleDownloadEvent,
   duplicate: () => {
     recipeDuplicateDialog.value = true;
